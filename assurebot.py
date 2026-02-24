@@ -11,6 +11,7 @@ import wave
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import requests
 from dotenv import load_dotenv
@@ -107,6 +108,15 @@ def play_pcm_16k_mono(input_path: Path, device: str | None) -> None:
     run_cmd(cmd)
 
 
+def play_wav(input_path: Path, device: str | None) -> None:
+    require_command("aplay")
+    cmd = ["aplay", "-q"]
+    if device:
+        cmd.extend(["-D", device])
+    cmd.append(str(input_path))
+    run_cmd(cmd)
+
+
 def save_pcm_as_wav(pcm_path: Path, wav_path: Path, sample_rate: int = 16000, channels: int = 1) -> None:
     wav_path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(wav_path), "wb") as wav_file:
@@ -116,7 +126,52 @@ def save_pcm_as_wav(pcm_path: Path, wav_path: Path, sample_rate: int = 16000, ch
         wav_file.writeframes(pcm_path.read_bytes())
 
 
-def elevenlabs_transcribe(audio_path: Path, cfg: Config, language_code: str | None) -> str:
+def parse_tts_output_format(output_format: str) -> tuple[str, int]:
+    parts = output_format.split("_")
+    if len(parts) < 2:
+        raise RuntimeError(f"Invalid ELEVENLABS_TTS_OUTPUT_FORMAT: {output_format}")
+    codec = parts[0].lower()
+    try:
+        sample_rate = int(parts[1])
+    except ValueError as exc:
+        raise RuntimeError(f"Invalid sample rate in ELEVENLABS_TTS_OUTPUT_FORMAT: {output_format}") from exc
+    return codec, sample_rate
+
+
+def normalize_lang_code(code: str | None) -> str | None:
+    if not code:
+        return None
+    c = code.strip().lower()
+    aliases = {
+        "en": "eng",
+        "eng": "eng",
+        "zh": "zho",
+        "zh-cn": "zho",
+        "zh-sg": "zho",
+        "cmn": "zho",
+        "zho": "zho",
+        "yue": "yue",
+        "zh-hk": "yue",
+        "zh-yue": "yue",
+    }
+    return aliases.get(c, c)
+
+
+def parse_allowed_languages(raw: str) -> set[str]:
+    allowed = {
+        normalize_lang_code(part)
+        for part in raw.split(",")
+        if part.strip()
+    }
+    return {code for code in allowed if code}
+
+
+def elevenlabs_transcribe(
+    audio_path: Path,
+    cfg: Config,
+    language_code: str | None,
+    allowed_languages: set[str] | None,
+) -> tuple[str, str | None]:
     url = f"{ELEVENLABS_BASE_URL}/speech-to-text"
     headers = {"xi-api-key": cfg.elevenlabs_api_key}
     data = {
@@ -137,7 +192,14 @@ def elevenlabs_transcribe(audio_path: Path, cfg: Config, language_code: str | No
     text = (payload.get("text") or "").strip()
     if not text:
         raise RuntimeError(f"ElevenLabs STT returned no text: {json.dumps(payload)[:500]}")
-    return text
+    detected_lang = normalize_lang_code(payload.get("language_code"))
+    if allowed_languages and detected_lang and detected_lang not in allowed_languages:
+        raise RuntimeError(
+            "STT language not allowed "
+            f"(detected={detected_lang}, allowed={sorted(allowed_languages)}). "
+            "Please speak English/Singlish, Mandarin Chinese, or Cantonese."
+        )
+    return text, detected_lang
 
 
 def elevenlabs_pick_first_voice(cfg: Config) -> str:
@@ -163,27 +225,48 @@ def elevenlabs_pick_first_voice(cfg: Config) -> str:
     return voice_id
 
 
-def elevenlabs_tts_to_pcm(text: str, cfg: Config, output_path: Path) -> None:
+def elevenlabs_tts_to_audio(text: str, cfg: Config, output_path: Path) -> dict[str, Any]:
     voice_id = elevenlabs_pick_first_voice(cfg)
     url = f"{ELEVENLABS_BASE_URL}/text-to-speech/{voice_id}"
+    codec, sample_rate = parse_tts_output_format(cfg.tts_output_format)
+    accept_map = {
+        "pcm": "audio/pcm",
+        "wav": "audio/wav",
+        "mp3": "audio/mpeg",
+        "ulaw": "audio/basic",
+        "alaw": "audio/basic",
+        "opus": "audio/ogg",
+    }
     headers = {
         "xi-api-key": cfg.elevenlabs_api_key,
-        "Accept": "audio/pcm",
         "Content-Type": "application/json",
     }
+    if codec in accept_map:
+        headers["Accept"] = accept_map[codec]
     payload = {
         "text": text,
         "model_id": cfg.elevenlabs_tts_model,
-        "output_format": cfg.tts_output_format,
         "voice_settings": {
             "stability": 0.4,
             "similarity_boost": 0.75,
         },
     }
-    resp = requests.post(url, headers=headers, json=payload, timeout=120)
+    resp = requests.post(
+        url,
+        headers=headers,
+        params={"output_format": cfg.tts_output_format},
+        json=payload,
+        timeout=120,
+    )
     if not resp.ok:
         raise RuntimeError(f"ElevenLabs TTS error {resp.status_code}: {resp.text[:500]}")
     output_path.write_bytes(resp.content)
+    return {
+        "codec": codec,
+        "sample_rate": sample_rate,
+        "content_type": resp.headers.get("Content-Type", ""),
+        "bytes": len(resp.content),
+    }
 
 
 def chat_with_openai(user_text: str, history: list[dict[str, str]], cfg: Config) -> str:
@@ -230,7 +313,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--record-seconds", type=int, default=6, help="Recording duration for arecord")
     parser.add_argument("--sample-rate", type=int, default=16000, help="Mic recording sample rate (Hz)")
     parser.add_argument("--channels", type=int, default=1, help="Mic channels")
-    parser.add_argument("--stt-language-code", help="Optional ElevenLabs STT language code (e.g. en, zh)")
+    parser.add_argument(
+        "--stt-language-code",
+        help="Optional ElevenLabs STT language code (ISO 639-1/3), e.g. eng, zho, yue",
+    )
+    parser.add_argument(
+        "--stt-allowed-languages",
+        default="eng,zho,yue",
+        help="Allowed STT languages (comma-separated). Default: eng,zho,yue (Singlish maps to eng)",
+    )
+    parser.add_argument(
+        "--disable-stt-language-filter",
+        action="store_true",
+        help="Do not reject transcripts outside the allowed language list",
+    )
     parser.add_argument("--mic-device", help="ALSA device string for arecord, e.g. plughw:1,0")
     parser.add_argument("--speaker-device", help="ALSA device string for aplay, e.g. plughw:0,0")
     parser.add_argument("--no-tts", action="store_true", help="Print bot text only; do not synthesize/play audio")
@@ -246,10 +342,15 @@ def main() -> int:
         return 1
 
     history: list[dict[str, str]] = []
+    allowed_languages = None
+    if not args.disable_stt_language_filter:
+        allowed_languages = parse_allowed_languages(args.stt_allowed_languages)
 
     print("ASSURECare voice chatbot prototype")
     print("Enter text to test without mic, or press Enter to record.")
     print("Type 'q' to quit.")
+    if allowed_languages:
+        print(f"STT language filter: {sorted(allowed_languages)} (Singlish uses 'eng')")
 
     with tempfile.TemporaryDirectory(prefix="assurecare_") as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -285,7 +386,14 @@ def main() -> int:
                         device=args.mic_device,
                     )
                     print("[stt] Transcribing with ElevenLabs...")
-                    user_text = elevenlabs_transcribe(wav_path, cfg, args.stt_language_code)
+                    user_text, detected_lang = elevenlabs_transcribe(
+                        wav_path,
+                        cfg,
+                        args.stt_language_code,
+                        allowed_languages=allowed_languages,
+                    )
+                    if detected_lang:
+                        print(f"[stt] Detected language: {detected_lang}")
                 except Exception as exc:
                     print(f"[audio/stt] {exc}", file=sys.stderr)
                     if args.once:
@@ -308,16 +416,46 @@ def main() -> int:
             history.append({"role": "assistant", "content": reply})
 
             if not args.no_tts:
-                pcm_path = tmp_path / "reply.pcm"
+                codec, sample_rate = parse_tts_output_format(cfg.tts_output_format)
+                temp_ext = "pcm" if codec == "pcm" else codec
+                audio_path = tmp_path / f"reply.{temp_ext}"
                 try:
                     print("[tts] Synthesizing with ElevenLabs...")
-                    elevenlabs_tts_to_pcm(reply, cfg, pcm_path)
+                    tts_meta = elevenlabs_tts_to_audio(reply, cfg, audio_path)
+                    if codec == "pcm" and audio_path.read_bytes()[:4] in {b"RIFF", b"ID3\x00"}:
+                        raise RuntimeError(
+                            "Expected raw PCM but received a containerized format. "
+                            "Try ELEVENLABS_TTS_OUTPUT_FORMAT=wav_16000."
+                        )
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    wav_path = saved_tts_dir / f"reply_{timestamp}_turn{turn}.wav"
-                    save_pcm_as_wav(pcm_path, wav_path)
-                    print(f"[save] TTS reply saved to {wav_path}")
+                    if codec == "pcm":
+                        saved_path = saved_tts_dir / f"reply_{timestamp}_turn{turn}.wav"
+                        save_pcm_as_wav(audio_path, saved_path, sample_rate=sample_rate)
+                    elif codec == "wav":
+                        saved_path = saved_tts_dir / f"reply_{timestamp}_turn{turn}.wav"
+                        saved_path.write_bytes(audio_path.read_bytes())
+                    elif codec == "mp3":
+                        saved_path = saved_tts_dir / f"reply_{timestamp}_turn{turn}.mp3"
+                        saved_path.write_bytes(audio_path.read_bytes())
+                    else:
+                        saved_path = saved_tts_dir / f"reply_{timestamp}_turn{turn}.{codec}"
+                        saved_path.write_bytes(audio_path.read_bytes())
+                    print(
+                        f"[save] TTS reply saved to {saved_path} "
+                        f"(codec={tts_meta['codec']}, content-type={tts_meta['content_type'] or 'unknown'})"
+                    )
                     print("[play] Playing reply...")
-                    play_pcm_16k_mono(pcm_path, device=args.speaker_device)
+                    if codec == "pcm":
+                        if sample_rate != 16000:
+                            raise RuntimeError(
+                                "PCM playback helper is currently fixed to 16kHz. "
+                                "Set ELEVENLABS_TTS_OUTPUT_FORMAT=pcm_16000 or wav_16000."
+                            )
+                        play_pcm_16k_mono(audio_path, device=args.speaker_device)
+                    elif codec == "wav":
+                        play_wav(audio_path, device=args.speaker_device)
+                    else:
+                        print(f"[play] Skipping playback for codec '{codec}' (use pcm_16000 or wav_16000).")
                 except Exception as exc:
                     print(f"[tts/play] {exc}", file=sys.stderr)
                     if args.once:
