@@ -7,7 +7,7 @@ After=network-online.target sound.target
 Type=simple
 User=pi
 Group=pi
-WorkingDirectory=/home/pi/Desktop/inno_challenge
+WorkingDirectory=/home/raspberry01/Desktop/inno_challenge
 Environment="PYTHONUNBUFFERED=1"
 
 # Run only the main process as User=pi; keep pre/post hooks as root so LED sysfs writes work.
@@ -17,7 +17,7 @@ PermissionsStartOnly=true
 ExecStartPre=/bin/sh -c 'if [ -e /sys/class/leds/led0/trigger ]; then echo none > /sys/class/leds/led0/trigger; fi; if [ -e /sys/class/leds/led0/brightness ]; then echo 1 > /sys/class/leds/led0/brightness; fi'
 
 # Default args only; adjust path/user for your Pi deployment location.
-ExecStart=/home/pi/Desktop/inno_challenge/venv/bin/python /home/pi/Desktop/inno_challenge/assure_dynamic_bot.py
+ExecStart=/home/raspberry01/Desktop/inno_challenge/venv/bin/python /home/raspberry01/Desktop/inno_challenge/assure_dynamic_bot.py
 
 # Turn LED off when stopped. (If you want default SD activity behavior back, restore the trigger manually.)
 ExecStopPost=/bin/sh -c 'if [ -e /sys/class/leds/led0/brightness ]; then echo 0 > /sys/class/leds/led0/brightness; fi'
