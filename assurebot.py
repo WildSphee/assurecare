@@ -138,20 +138,10 @@ def normalize_lang_code(code: str | None) -> str | None:
     return aliases.get(c, c)
 
 
-def parse_allowed_languages(raw: str) -> set[str]:
-    allowed = {
-        normalize_lang_code(part)
-        for part in raw.split(",")
-        if part.strip()
-    }
-    return {code for code in allowed if code}
-
-
 def elevenlabs_transcribe(
     audio_path: Path,
     cfg: Config,
     language_code: str | None,
-    allowed_languages: set[str] | None,
 ) -> tuple[str, str | None]:
     url = f"{ELEVENLABS_BASE_URL}/speech-to-text"
     headers = {"xi-api-key": cfg.elevenlabs_api_key}
@@ -174,12 +164,6 @@ def elevenlabs_transcribe(
     if not text:
         raise RuntimeError(f"ElevenLabs STT returned no text: {json.dumps(payload)[:500]}")
     detected_lang = normalize_lang_code(payload.get("language_code"))
-    if allowed_languages and detected_lang and detected_lang not in allowed_languages:
-        raise RuntimeError(
-            "STT language not allowed "
-            f"(detected={detected_lang}, allowed={sorted(allowed_languages)}). "
-            "Please speak English/Singlish, Mandarin Chinese, or Cantonese."
-        )
     return text, detected_lang
 
 
@@ -324,16 +308,6 @@ def parse_args() -> argparse.Namespace:
         "--stt-language-code",
         help="Optional ElevenLabs STT language code (ISO 639-1/3), e.g. eng, zho, yue",
     )
-    parser.add_argument(
-        "--stt-allowed-languages",
-        default="eng,zho,yue",
-        help="Allowed STT languages (comma-separated). Default: eng,zho,yue (Singlish maps to eng)",
-    )
-    parser.add_argument(
-        "--disable-stt-language-filter",
-        action="store_true",
-        help="Do not reject transcripts outside the allowed language list",
-    )
     parser.add_argument("--mic-device", help="ALSA device string for arecord, e.g. plughw:1,0")
     parser.add_argument("--speaker-device", help="ALSA device string for aplay, e.g. plughw:0,0")
     parser.add_argument("--no-tts", action="store_true", help="Print bot text only; do not synthesize/play audio")
@@ -358,15 +332,9 @@ def main() -> int:
         return 0
 
     history: list[dict[str, str]] = []
-    allowed_languages = None
-    if not args.disable_stt_language_filter:
-        allowed_languages = parse_allowed_languages(args.stt_allowed_languages)
-
     print("ASSURECare voice chatbot prototype")
     print("Enter text to test without mic, or press Enter to record.")
     print("Type 'q' to quit.")
-    if allowed_languages:
-        print(f"STT language filter: {sorted(allowed_languages)} (Singlish uses 'eng')")
 
     with tempfile.TemporaryDirectory(prefix="assurecare_") as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -406,7 +374,6 @@ def main() -> int:
                         wav_path,
                         cfg,
                         args.stt_language_code,
-                        allowed_languages=allowed_languages,
                     )
                     if detected_lang:
                         print(f"[stt] Detected language: {detected_lang}")
