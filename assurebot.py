@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1"
+DEFAULT_ELEVENLABS_VOICE_ID = "SDNKIYEpTz0h56jQX8rA"
 
 SYSTEM_PROMPT = """
 You are ASSURECare, a calm voice companion for elderly cardiac care check-ins.
@@ -50,6 +51,7 @@ class Config:
     elevenlabs_stt_model: str = "scribe_v1"
     elevenlabs_tts_model: str = "eleven_multilingual_v2"
     elevenlabs_voice_id: str | None = None
+    elevenlabs_voice_name: str | None = None
     tts_output_format: str = "pcm_16000"
 
 
@@ -202,10 +204,7 @@ def elevenlabs_transcribe(
     return text, detected_lang
 
 
-def elevenlabs_pick_first_voice(cfg: Config) -> str:
-    if cfg.elevenlabs_voice_id:
-        return cfg.elevenlabs_voice_id
-
+def elevenlabs_get_voices(cfg: Config) -> list[dict[str, Any]]:
     url = f"{ELEVENLABS_BASE_URL}/voices"
     headers = {"xi-api-key": cfg.elevenlabs_api_key}
     resp = requests.get(url, headers=headers, timeout=60)
@@ -217,16 +216,44 @@ def elevenlabs_pick_first_voice(cfg: Config) -> str:
     voices = resp.json().get("voices", [])
     if not voices:
         raise RuntimeError("No ElevenLabs voices found. Set ELEVENLABS_VOICE_ID in .env.")
-    voice = voices[0]
-    voice_id = voice.get("voice_id")
-    if not voice_id:
-        raise RuntimeError("Voice lookup response missing voice_id.")
-    print(f"[voice] Using ElevenLabs voice: {voice.get('name', 'unknown')} ({voice_id})")
-    return voice_id
+    return voices
+
+
+def voice_search_blob(voice: dict[str, Any]) -> str:
+    labels = voice.get("labels") or {}
+    parts = [
+        str(voice.get("name") or ""),
+        str(voice.get("description") or ""),
+        str(voice.get("category") or ""),
+    ]
+    if isinstance(labels, dict):
+        parts.extend(str(v) for v in labels.values())
+        parts.extend(str(k) for k in labels.keys())
+    return " ".join(parts).lower()
+
+
+def print_voices(voices: list[dict[str, Any]]) -> None:
+    print("\nAvailable ElevenLabs voices:")
+    for voice in voices:
+        labels = voice.get("labels") or {}
+        gender = labels.get("gender") if isinstance(labels, dict) else None
+        accent = labels.get("accent") if isinstance(labels, dict) else None
+        print(
+            f"- {voice.get('name', 'unknown')} | id={voice.get('voice_id', 'n/a')} "
+            f"| gender={gender or 'n/a'} | accent={accent or 'n/a'}"
+        )
+
+
+def elevenlabs_pick_voice(cfg: Config) -> str:
+    if cfg.elevenlabs_voice_id:
+        return cfg.elevenlabs_voice_id
+
+    print(f"[voice] Using default ElevenLabs voice ID: {DEFAULT_ELEVENLABS_VOICE_ID}")
+    return DEFAULT_ELEVENLABS_VOICE_ID
 
 
 def elevenlabs_tts_to_audio(text: str, cfg: Config, output_path: Path) -> dict[str, Any]:
-    voice_id = elevenlabs_pick_first_voice(cfg)
+    voice_id = elevenlabs_pick_voice(cfg)
     url = f"{ELEVENLABS_BASE_URL}/text-to-speech/{voice_id}"
     codec, sample_rate = parse_tts_output_format(cfg.tts_output_format)
     accept_map = {
@@ -302,6 +329,7 @@ def load_config() -> Config:
         elevenlabs_stt_model=os.getenv("ELEVENLABS_STT_MODEL", "scribe_v1"),
         elevenlabs_tts_model=os.getenv("ELEVENLABS_TTS_MODEL", "eleven_multilingual_v2"),
         elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID", "").strip() or None,
+        elevenlabs_voice_name=os.getenv("ELEVENLABS_VOICE_NAME", "").strip() or None,
         tts_output_format=os.getenv("ELEVENLABS_TTS_OUTPUT_FORMAT", "pcm_16000"),
     )
 
@@ -330,6 +358,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mic-device", help="ALSA device string for arecord, e.g. plughw:1,0")
     parser.add_argument("--speaker-device", help="ALSA device string for aplay, e.g. plughw:0,0")
     parser.add_argument("--no-tts", action="store_true", help="Print bot text only; do not synthesize/play audio")
+    parser.add_argument("--list-voices", action="store_true", help="List available ElevenLabs voices and exit")
     return parser.parse_args()
 
 
@@ -340,6 +369,14 @@ def main() -> int:
     except Exception as exc:
         print(f"[config] {exc}", file=sys.stderr)
         return 1
+
+    if args.list_voices:
+        try:
+            print_voices(elevenlabs_get_voices(cfg))
+        except Exception as exc:
+            print(f"[voices] {exc}", file=sys.stderr)
+            return 1
+        return 0
 
     history: list[dict[str, str]] = []
     allowed_languages = None
