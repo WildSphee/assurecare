@@ -1,0 +1,34 @@
+[Unit]
+Description=ASSURECare Dynamic Voice Bot (always-listening prototype)
+Wants=network-online.target
+After=network-online.target sound.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/Desktop/inno_challenge
+Environment="PYTHONUNBUFFERED=1"
+
+# Run only the main process as User=pi; keep pre/post hooks as root so LED sysfs writes work.
+PermissionsStartOnly=true
+
+# Turn the Pi green ACT LED on while the service is running.
+ExecStartPre=/bin/sh -c 'if [ -e /sys/class/leds/led0/trigger ]; then echo none > /sys/class/leds/led0/trigger; fi; if [ -e /sys/class/leds/led0/brightness ]; then echo 1 > /sys/class/leds/led0/brightness; fi'
+
+# Default args only; adjust path/user for your Pi deployment location.
+ExecStart=/home/pi/Desktop/inno_challenge/venv/bin/python /home/pi/Desktop/inno_challenge/assure_dynamic_bot.py
+
+# Turn LED off when stopped. (If you want default SD activity behavior back, restore the trigger manually.)
+ExecStopPost=/bin/sh -c 'if [ -e /sys/class/leds/led0/brightness ]; then echo 0 > /sys/class/leds/led0/brightness; fi'
+
+Restart=always
+RestartSec=2
+TimeoutStopSec=10
+KillSignal=SIGINT
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
