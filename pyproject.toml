@@ -1,14 +1,19 @@
 [project]
-name = "inno-challenge"
+name = "assurecare-voice-bot"
 version = "0.1.0"
-description = ""
+description = "ASSURECare Raspberry Pi voice chatbot prototype"
 authors = [
     {name = "Reagan",email = "rrr.chanhiulok@gmail.com"}
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.11,<3.14"
 dependencies = [
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
 ]
 
+[project.scripts]
+assurebot = "assurebot:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
