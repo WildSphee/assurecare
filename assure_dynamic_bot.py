@@ -21,6 +21,7 @@ from assurebot import (
     play_wav,
     require_command,
     save_pcm_as_wav,
+    with_tts_lead_in,
 )
 
 
@@ -34,6 +35,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mic-device", help="ALSA device string for arecord, e.g. plughw:1,0")
     parser.add_argument("--speaker-device", help="ALSA device string for aplay, e.g. plughw:0,0")
     parser.add_argument("--stt-language-code", help="Optional ElevenLabs STT language code (eng, zho, yue, etc.)")
+    parser.add_argument(
+        "--tts-lead-in-ms",
+        type=int,
+        default=500,
+        help="Prepend silence before playback (ms) to avoid speaker wake-up clipping",
+    )
     parser.add_argument("--no-tts", action="store_true", help="Print bot text only; do not synthesize/play audio")
     parser.add_argument("--vad-threshold", type=int, default=650, help="RMS threshold for speech detection")
     parser.add_argument("--chunk-ms", type=int, default=30, help="Audio chunk size in ms for VAD")
@@ -303,15 +310,22 @@ def main() -> int:
                         f"(codec={tts_meta['codec']}, content-type={tts_meta['content_type'] or 'unknown'})"
                     )
                     print("[play] Playing reply...")
+                    playback_audio_path = with_tts_lead_in(
+                        audio_path,
+                        codec=codec,
+                        sample_rate=sample_rate,
+                        lead_in_ms=max(0, args.tts_lead_in_ms),
+                        tmp_dir=tmp_path,
+                    )
                     if codec == "pcm":
                         if sample_rate != 16000:
                             raise RuntimeError(
                                 "PCM playback helper is currently fixed to 16kHz. "
                                 "Set ELEVENLABS_TTS_OUTPUT_FORMAT=pcm_16000 or wav_16000."
                             )
-                        play_pcm_16k_mono(audio_path, device=args.speaker_device)
+                        play_pcm_16k_mono(playback_audio_path, device=args.speaker_device)
                     elif codec == "wav":
-                        play_wav(audio_path, device=args.speaker_device)
+                        play_wav(playback_audio_path, device=args.speaker_device)
                     else:
                         print(f"[play] Skipping playback for codec '{codec}' (use pcm_16000 or wav_16000).")
                 except Exception as exc:

@@ -107,6 +107,47 @@ def save_pcm_as_wav(pcm_path: Path, wav_path: Path, sample_rate: int = 16000, ch
         wav_file.writeframes(pcm_path.read_bytes())
 
 
+def with_tts_lead_in(
+    audio_path: Path,
+    *,
+    codec: str,
+    sample_rate: int,
+    lead_in_ms: int,
+    tmp_dir: Path,
+) -> Path:
+    if lead_in_ms <= 0:
+        return audio_path
+
+    if codec == "pcm":
+        # Current playback supports pcm_16000 mono only.
+        channels = 1
+        sample_width = 2
+        silence_bytes = (sample_rate * channels * sample_width * lead_in_ms) // 1000
+        silence_bytes -= silence_bytes % (channels * sample_width)
+        out_path = tmp_dir / f"{audio_path.stem}_leadin.pcm"
+        out_path.write_bytes(b"\x00" * silence_bytes + audio_path.read_bytes())
+        return out_path
+
+    if codec == "wav":
+        out_path = tmp_dir / f"{audio_path.stem}_leadin.wav"
+        with wave.open(str(audio_path), "rb") as src:
+            channels = src.getnchannels()
+            sample_width = src.getsampwidth()
+            frame_rate = src.getframerate()
+            frame_count = max(0, frame_rate * lead_in_ms // 1000)
+            silence = b"\x00" * (frame_count * channels * sample_width)
+            frames = src.readframes(src.getnframes())
+            with wave.open(str(out_path), "wb") as dst:
+                dst.setnchannels(channels)
+                dst.setsampwidth(sample_width)
+                dst.setframerate(frame_rate)
+                dst.writeframes(silence)
+                dst.writeframes(frames)
+        return out_path
+
+    return audio_path
+
+
 def parse_tts_output_format(output_format: str) -> tuple[str, int]:
     parts = output_format.split("_")
     if len(parts) < 2:
@@ -310,6 +351,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--mic-device", help="ALSA device string for arecord, e.g. plughw:1,0")
     parser.add_argument("--speaker-device", help="ALSA device string for aplay, e.g. plughw:0,0")
+    parser.add_argument(
+        "--tts-lead-in-ms",
+        type=int,
+        default=500,
+        help="Prepend silence before playback (ms) to avoid speaker wake-up clipping",
+    )
     parser.add_argument("--no-tts", action="store_true", help="Print bot text only; do not synthesize/play audio")
     parser.add_argument("--list-voices", action="store_true", help="List available ElevenLabs voices and exit")
     return parser.parse_args()
@@ -428,15 +475,22 @@ def main() -> int:
                         f"(codec={tts_meta['codec']}, content-type={tts_meta['content_type'] or 'unknown'})"
                     )
                     print("[play] Playing reply...")
+                    playback_audio_path = with_tts_lead_in(
+                        audio_path,
+                        codec=codec,
+                        sample_rate=sample_rate,
+                        lead_in_ms=max(0, args.tts_lead_in_ms),
+                        tmp_dir=tmp_path,
+                    )
                     if codec == "pcm":
                         if sample_rate != 16000:
                             raise RuntimeError(
                                 "PCM playback helper is currently fixed to 16kHz. "
                                 "Set ELEVENLABS_TTS_OUTPUT_FORMAT=pcm_16000 or wav_16000."
                             )
-                        play_pcm_16k_mono(audio_path, device=args.speaker_device)
+                        play_pcm_16k_mono(playback_audio_path, device=args.speaker_device)
                     elif codec == "wav":
-                        play_wav(audio_path, device=args.speaker_device)
+                        play_wav(playback_audio_path, device=args.speaker_device)
                     else:
                         print(f"[play] Skipping playback for codec '{codec}' (use pcm_16000 or wav_16000).")
                 except Exception as exc:
