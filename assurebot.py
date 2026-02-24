@@ -7,7 +7,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import wave
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import requests
@@ -103,6 +105,15 @@ def play_pcm_16k_mono(input_path: Path, device: str | None) -> None:
         cmd.extend(["-D", device])
     cmd.append(str(input_path))
     run_cmd(cmd)
+
+
+def save_pcm_as_wav(pcm_path: Path, wav_path: Path, sample_rate: int = 16000, channels: int = 1) -> None:
+    wav_path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(wav_path), "wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(2)  # 16-bit PCM
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm_path.read_bytes())
 
 
 def elevenlabs_transcribe(audio_path: Path, cfg: Config, language_code: str | None) -> str:
@@ -242,6 +253,8 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="assurecare_") as tmp_dir:
         tmp_path = Path(tmp_dir)
+        saved_tts_dir = Path("outputs") / "tts_replies"
+        saved_tts_dir.mkdir(parents=True, exist_ok=True)
         turn = 0
 
         while True:
@@ -299,6 +312,10 @@ def main() -> int:
                 try:
                     print("[tts] Synthesizing with ElevenLabs...")
                     elevenlabs_tts_to_pcm(reply, cfg, pcm_path)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    wav_path = saved_tts_dir / f"reply_{timestamp}_turn{turn}.wav"
+                    save_pcm_as_wav(pcm_path, wav_path)
+                    print(f"[save] TTS reply saved to {wav_path}")
                     print("[play] Playing reply...")
                     play_pcm_16k_mono(pcm_path, device=args.speaker_device)
                 except Exception as exc:
