@@ -27,8 +27,8 @@ class Config:
     elevenlabs_api_key: str
     openai_api_key: str
     openai_model: str = "gpt-4o-mini"
-    elevenlabs_stt_model: str = "scribe_v1"
-    elevenlabs_tts_model: str = "eleven_multilingual_v2"
+    elevenlabs_stt_model: str = "scribe_v2"
+    elevenlabs_tts_model: str = "eleven_flash_v2_5"
     elevenlabs_voice_id: str | None = None
     elevenlabs_voice_name: str | None = None
     tts_output_format: str = "pcm_16000"
@@ -289,8 +289,8 @@ def load_config() -> Config:
         elevenlabs_api_key=elevenlabs_api_key,
         openai_api_key=openai_api_key,
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        elevenlabs_stt_model=os.getenv("ELEVENLABS_STT_MODEL", "scribe_v1"),
-        elevenlabs_tts_model=os.getenv("ELEVENLABS_TTS_MODEL", "eleven_multilingual_v2"),
+        elevenlabs_stt_model=os.getenv("ELEVENLABS_STT_MODEL", "scribe_v2"),
+        elevenlabs_tts_model=os.getenv("ELEVENLABS_TTS_MODEL", "eleven_flash_v2_5"),
         elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID", "").strip() or None,
         elevenlabs_voice_name=os.getenv("ELEVENLABS_VOICE_NAME", "").strip() or None,
         tts_output_format=os.getenv("ELEVENLABS_TTS_OUTPUT_FORMAT", "pcm_16000"),
