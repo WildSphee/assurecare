@@ -8,25 +8,10 @@ This repo is now set up for a **manual Raspberry Pi 4 test prototype**:
 - **ElevenLabs TTS** synthesizes the reply
 - `aplay` plays the spoken reply
 
-This is intentionally simple so you can verify the API connections and audio path first.
-
-There are now two runnable prototypes:
+## There are now two runnable prototypes:
 
 - `assurebot.py`: manual turn-taking (`Enter` to record or type text)
 - `assure_dynamic_bot.py`: always-listening prototype (auto-start on speech, auto-send on silence)
-
-## Why not OpenAI Agents SDK / Realtime (for now)?
-
-You do **not** need the OpenAI Agents SDK or realtime streaming for this prototype.
-For Raspberry Pi manual testing, a straightforward request/response loop is easier to debug:
-
-1. Record audio
-2. Transcribe (ElevenLabs)
-3. Generate text (OpenAI)
-4. Synthesize audio (ElevenLabs)
-5. Play audio
-
-Realtime/streaming can be added later after the basic pipeline is stable.
 
 ## Raspberry Pi 4 notes
 
@@ -59,8 +44,8 @@ Optional (recommended for stable TTS voice selection):
 
 - `ELEVENLABS_VOICE_ID=<your_voice_id>`
 - `OPENAI_MODEL=gpt-4o-mini`
-- `ELEVENLABS_STT_MODEL=scribe_v2` (default in code)
-- `ELEVENLABS_TTS_MODEL=eleven_flash_v2_5` (default in code; lower latency)
+- `ELEVENLABS_STT_MODEL=scribe_v2`
+- `ELEVENLABS_TTS_MODEL=eleven_flash_v2_5` (lower latency)
 - `ELEVENLABS_TTS_OUTPUT_FORMAT=pcm_16000`
 
 If `ELEVENLABS_VOICE_ID` is not set, the script will fetch your voice list and use the first available voice.
@@ -134,18 +119,6 @@ python assure_dynamic_bot.py --vad-threshold 900 --end-silence-ms 700
 
 Note: `assure_dynamic_bot.py` is an auto-turn prototype, not full realtime streaming. It still uses batch ElevenLabs STT + blocking OpenAI + blocking ElevenLabs TTS, but removes the manual "press Enter to record" step.
 
-## What the prompt is hard-coded to do
-
-The bot is hard-coded as an **ASSURECare elderly care companion prototype** for Mr. Tan:
-
-- BP check-in (morning/evening)
-- Medication adherence reminders/checks
-- Symptom check (dizziness, headache, chest discomfort)
-- Simple rotating context (sleep / salty meal / stress / exercise)
-- Calm, concise responses
-- Emergency escalation language for urgent symptoms (without diagnosing)
-
-This keeps the behavior aligned with your user story while staying lightweight for Raspberry Pi testing.
 
 ## API docs used (for this implementation and next steps)
 
