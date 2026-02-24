@@ -2,11 +2,12 @@
 Description=ASSURECare Dynamic Voice Bot (always-listening prototype)
 Wants=network-online.target
 After=network-online.target sound.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
-User=pi
-Group=pi
+User=raspberry01
 WorkingDirectory=/home/raspberry01/Desktop/inno_challenge
 Environment="PYTHONUNBUFFERED=1"
 
@@ -23,8 +24,8 @@ ExecStart=/home/raspberry01/Desktop/inno_challenge/venv/bin/python /home/raspber
 ExecStopPost=/bin/sh -c 'if [ -e /sys/class/leds/led0/brightness ]; then echo 0 > /sys/class/leds/led0/brightness; fi'
 
 Restart=always
-RestartSec=2
-TimeoutStopSec=10
+RestartSec=10
+TimeoutStopSec=15
 KillSignal=SIGINT
 
 StandardOutput=journal
