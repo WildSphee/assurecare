@@ -8,10 +8,13 @@ StartLimitBurst=5
 [Service]
 Type=simple
 User=raspberry01
+Group=raspberry01
+SupplementaryGroups=audio
 WorkingDirectory=/home/raspberry01/Desktop/inno_challenge
 Environment="PYTHONUNBUFFERED=1"
+Environment="HOME=/home/raspberry01"
 
-# Run only the main process as User=pi; keep pre/post hooks as root so LED sysfs writes work.
+# Run only the main process as the app user; keep pre/post hooks as root so LED sysfs writes work.
 PermissionsStartOnly=true
 
 # Turn the Pi green ACT LED on while the service is running.

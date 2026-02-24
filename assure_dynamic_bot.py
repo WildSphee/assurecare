@@ -5,6 +5,7 @@ import math
 import subprocess
 import sys
 import tempfile
+import time
 import wave
 from collections import deque
 from datetime import datetime
@@ -126,7 +127,7 @@ def capture_until_silence(
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         stdin=subprocess.DEVNULL,
     )
     if proc.stdout is None:
@@ -139,7 +140,21 @@ def capture_until_silence(
         while True:
             chunk = proc.stdout.read(chunk_bytes)
             if not chunk:
-                raise RuntimeError("arecord stopped while waiting for speech.")
+                rc = proc.poll()
+                stderr_text = ""
+                if proc.stderr is not None:
+                    try:
+                        stderr_bytes = proc.stderr.read() or b""
+                        stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+                    except Exception:
+                        stderr_text = ""
+                if rc is None:
+                    raise RuntimeError("arecord stopped while waiting for speech.")
+                if stderr_text:
+                    raise RuntimeError(
+                        f"arecord exited immediately (code={rc}) while waiting for speech: {stderr_text}"
+                    )
+                raise RuntimeError(f"arecord exited immediately (code={rc}) while waiting for speech.")
 
             if len(chunk) % (bytes_per_sample * channels) != 0:
                 continue
@@ -177,12 +192,13 @@ def capture_until_silence(
                         print(f"[vad] Speech end by max length (peak={peak_rms})")
                     break
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=1)
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=1)
 
     if not frames:
         raise RuntimeError("No speech captured.")
@@ -240,6 +256,7 @@ def main() -> int:
                 print(f"[audio/stt] {exc}", file=sys.stderr)
                 if args.once:
                     return 1
+                time.sleep(1)
                 continue
 
             print(f"[you] {user_text}")
