@@ -21,7 +21,7 @@ PermissionsStartOnly=true
 ExecStartPre=/bin/sh -c 'if [ -e /sys/class/leds/led0/trigger ]; then echo none > /sys/class/leds/led0/trigger; fi; if [ -e /sys/class/leds/led0/brightness ]; then echo 1 > /sys/class/leds/led0/brightness; fi'
 
 # Default args only; adjust path/user for your Pi deployment location.
-ExecStart=/home/raspberry01/Desktop/inno_challenge/venv/bin/python /home/raspberry01/Desktop/inno_challenge/assure_dynamic_bot.py
+ExecStart=/home/raspberry01/Desktop/inno_challenge/venv/bin/python /home/raspberry01/Desktop/inno_challenge/assure_dynamic_bot.py --mic-device plughw:3,0 --speaker-device plughw:2,0
 
 # Turn LED off when stopped. (If you want default SD activity behavior back, restore the trigger manually.)
 ExecStopPost=/bin/sh -c 'if [ -e /sys/class/leds/led0/brightness ]; then echo 0 > /sys/class/leds/led0/brightness; fi'
