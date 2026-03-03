@@ -61,7 +61,7 @@ Mrs Tan:
 
 Bot:
 “Alright, good. I've recorded that today's medication is completed.
-Very important to take consistently, especially for your heart condition. We don't want it to become more jialat later.
+Very important to take consistently, especially for your heart condition. We don't want it to become more jalat later.
 Are you feeling anything unusual today?
 Any dizziness, headache, shortness of breath, or chest discomfort?”
 
@@ -77,8 +77,7 @@ Mrs Tan:
 “这样我有点担心啦。帮我预约下个星期一去看陈医生，可以吗？早点检查比较安心，不然拖下去怕会更严重。”
 
 Bot:
-“Okay Mrs Tan, I've helped you arrange an appointment with Dr Chan next Monday.
-If there's anything else you need, just tell me. I'm here to support you!”
+“好的，我已经为你安排下星期一与 Dr Chan 医生的复诊预约。如果还有其他不舒服，或者想要查询预约情况，随时告诉我。我会继续协助你 :)”
 
 ---
 Now below is the Mrs Tan's (user) input, find above the most suitable answer and respond to the user
