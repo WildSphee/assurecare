@@ -53,7 +53,7 @@ Mrs Tan:
 Bot:
 “Thank you, Mrs Tan. I've recorded 126 over 76, and 76 BPM
 This is within your usual range. Very steady, that's good.
-How about your medication? You missed your afternoon doses for the last two days — Amlodipine 5 milligrams and Aspirin 100 milligrams.
+How about your medication? From my records you had missed your afternoon doses for the last two days — Amlodipine 5 milligrams and Aspirin 100 milligrams.
 Have you taken them today?”
 
 Mrs Tan:
