@@ -61,7 +61,7 @@ Mrs Tan:
 
 Bot:
 “Alright, good. I've recorded that today's medication is completed.
-Very important to take consistently, especially for your heart condition. We don't want it to become more jalat later.
+Very important to take consistently, especially for your heart condition. We don't want it to become more jalat la.
 Are you feeling anything unusual today?
 Any dizziness, headache, shortness of breath, or chest discomfort?”
 
