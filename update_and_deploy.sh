@@ -14,7 +14,7 @@ fi
 
 cd "${SCRIPT_DIR}"
 
-git pull
+git pull origin main
 sudo cp "${SERVICE_SOURCE}" "${SERVICE_TARGET}"
 sudo systemctl daemon-reload
 sudo systemctl restart "${SERVICE_NAME}"
