@@ -1,5 +1,27 @@
 ## ASSURECare Raspberry Pi 4 Voice Chatbot Prototype
 
+---
+
+## 🏆 Award — NUS Synapxe IMDA AI Innovation Challenge
+
+**Team ASSURE** brought home the trophy at the **NUS Synapxe IMDA AI Innovation Challenge**, competing against 181 teams and 800+ participants!
+
+| | |
+|---|---|
+| ![Award photo 2](docs/award_2.jpeg) | ![Award photo 1](docs/award_1.jpeg) |
+| ![Award photo 3](docs/award_3.jpeg) | |
+
+**Team members:**
+
+- [Reagan Chan](https://www.linkedin.com/in/reagan-chan/?skipRedirect=true)
+- [Aishwarya Jayaraman](https://www.linkedin.com/in/aishwarya-jayaraman-7a47a422a/)
+- [Sara Tan](https://www.linkedin.com/in/sara-tan-kwan-ling/)
+- [Sandra Lim](https://www.linkedin.com/in/sandra-lim-4b7a1622/)
+- [Udhaya Rathinavel](https://www.linkedin.com/in/udhaya-rathinavel-739689166/)
+- [Hsinning Lu](https://www.linkedin.com/in/lu-hsin-ning/)
+
+---
+
 This repo is now set up for a **manual Raspberry Pi 4 test prototype**:
 
 - `arecord` captures microphone audio
